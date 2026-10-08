@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0e17" />
+    <meta
+      name="description"
+      content="Depthu Video Converter：在本机将视频或图片转换为灰度深度图和深度视频。"
+    />
+    <title>Depthu · 深度视频转换</title>
+    <link rel="stylesheet" href="./styles.css?v=20260929-3" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Depthu 首页">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-orbit orbit-one"></span>
+            <span class="brand-orbit orbit-two"></span>
+            <span class="brand-core"></span>
+          </span>
+          <span class="brand-word">Depthu</span>
+          <span class="brand-divider">/</span>
+          <span class="brand-product">Video Converter</span>
+        </a>
+
+        <div class="topbar-actions">
+          <span class="local-pill"><span class="status-dot"></span>本机处理</span>
+          <button class="icon-button" type="button" aria-label="设置" data-action="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z" />
+              <path d="m19.4 13.4 1.2.9-1.7 2.9-1.4-.5a7.8 7.8 0 0 1-1.7 1l-.2 1.5h-3.4l-.2-1.5a7.7 7.7 0 0 1-1.8-1l-1.4.5-1.7-2.9 1.2-.9a7.1 7.1 0 0 1 0-2l-1.2-.9 1.7-2.9 1.4.5a7.8 7.8 0 0 1 1.7-1L12.1 5h3.4l.2 1.5a7.7 7.7 0 0 1 1.8 1l1.4-.5 1.7 2.9-1.2.9a7.1 7.1 0 0 1 0 2Z" />
+            </svg>
+          </button>
+          <button class="profile-chip" type="button" aria-label="账户" data-action="profile">A</button>
+        </div>
+      </header>
+
+      <main class="page-wrap">
+        <section class="intro-row">
+          <div>
+            <div class="eyebrow"><span></span> DEPTH STUDIO · 01</div>
+            <h1>把画面转换成<span>深度</span></h1>
+            <p class="intro-copy">在本机生成可用于视觉创作、空间效果与后期合成的灰度深度图。</p>
+          </div>
+          <div class="intro-meta">
+            <div class="meta-label">ENGINE STATUS</div>
+            <div class="engine-state"><span class="status-dot"></span>等待导入素材</div>
+            <div class="meta-sub">素材不会离开你的设备</div>
+          </div>
+        </section>
+
+        <div class="workspace-grid">
+          <div class="content-column">
+            <section class="panel source-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-index">01 <span>/</span> SOURCE</div>
+                  <h2>导入素材</h2>
+                </div>
+                <span class="panel-state" id="fileState">未选择</span>
+              </div>
+
+              <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择视频或图片">
+                <input id="fileInput" type="file" accept="video/*,image/*,.mkv,.webm,.m4v" hidden />
+                <div class="drop-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <path d="M16 21V7m0 0-5 5m5-5 5 5" />
+                    <path d="M7 19.5v4A2.5 2.5 0 0 0 9.5 26h13a2.5 2.5 0 0 0 2.5-2.5v-4" />
+                  </svg>
+                </div>
+                <div class="drop-title">拖入视频或图片</div>
+                <div class="drop-subtitle">或 <button class="text-button" id="chooseButton" type="button">浏览文件</button> 选择本地素材</div>
+                <div class="drop-formats">MP4 · MOV · M4V · AVI · MKV · WEBM · PNG · JPG</div>
+              </div>
+
+              <div class="source-preview hidden" id="sourcePreview">
+                <div class="source-media" id="sourceMedia">
+                  <video id="sourceVideo" controls playsinline hidden></video>
+                  <img id="sourceImage" alt="已选择的图片素材" hidden />
+                  <div class="media-overlay"><span id="sourceType">VIDEO</span><span>原始素材</span></div>
+                </div>
+                <div class="source-details">
+                  <div class="source-file-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M6 3.8h8l4 4V20H6z" /><path d="M14 3.8v4h4M9 12h6M9 15.5h6" /></svg>
+                  </div>
+                  <div class="source-file-copy">
+                    <strong id="sourceName">—</strong>
+                    <span id="sourceMeta">—</span>
+                  </div>
+                  <button class="remove-button" id="removeFile" type="button" aria-label="关闭当前素材并重新上传" title="关闭当前素材并重新上传">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"></path></svg>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <div class="flow-connector" aria-hidden="true">
+              <span class="connector-line"></span>
+              <span class="connector-node"></span>
+              <span class="connector-label">DEPTH INFERENCE</span>
+            </div>
+
+            <section class="panel result-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-index">02 <span>/</span> RESULT</div>
+                  <h2>深度结果</h2>
+                </div>
+                <span class="panel-state muted-state" id="resultState">等待转换</span>
+              </div>
+
+              <div class="result-empty" id="resultEmpty">
+                <div class="result-mark" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <strong>深度预览将在这里出现</strong>
+                <p>完成转换后，预览下方会出现“导出”按钮。</p>
+              </div>
+
+              <div class="result-ready hidden" id="resultReady">
+                <div class="depth-preview" id="depthPreview">
+                  <canvas id="depthCanvas" class="depth-canvas" hidden></canvas>
+                  <video id="outputVideo" class="output-video" controls playsinline hidden></video>
+                  <div class="depth-scanline"></div>
+                  <div class="depth-grid-lines"></div>
+                  <div class="depth-center-label">DEPTH MAP / RELATIVE</div>
+                  <div class="depth-caption"><span class="depth-scale dark-scale"></span>近 <span class="depth-scale light-scale"></span>远</div>
+                </div>
+                <div class="result-details">
+                  <div>
+                    <strong id="resultName">depth-output.mp4</strong>
+                    <span id="resultMeta">灰度深度视频 · 720p</span>
+                  </div>
+                  <div class="result-actions">
+                    <button class="secondary-button" type="button" data-action="fullscreen">全屏预览</button>
+                    <button class="secondary-button" type="button" data-action="open-result">打开结果</button>
+                    <button class="export-button" id="exportButton" type="button" data-action="export">
+                      <span class="export-icon" aria-hidden="true">↓</span>
+                      <span id="exportLabel">导出结果</span>
+                      <span class="export-arrow" aria-hidden="true">↗</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="control-column">
+            <section class="panel control-panel">
+              <div class="panel-heading control-heading">
+                <div>
+                  <div class="section-index">CONFIGURE</div>
+                  <h2>转换参数</h2>
+                </div>
+                <button class="reset-button" id="resetButton" type="button">重置</button>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="modelSelect">深度模型 <span>MODEL</span></label>
+                <div class="select-wrap model-select-wrap">
+                  <select id="modelSelect" class="model-select-native" tabindex="-1" aria-hidden="true">
+                    <option value="small">Small — 浏览器本地</option>
+                    <option value="base">Base — 浏览器本地</option>
+                    <option value="large">Large — 浏览器本地</option>
+                  </select>
+                  <button class="model-select-trigger" id="modelSelectTrigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="选择深度模型">
+                    <span class="model-select-trigger-copy">
+                      <strong id="modelSelectTriggerName">Small</strong>
+                      <span id="modelSelectTriggerMeta">浏览器本地 · 约 99 MB</span>
+                    </span>
+                    <svg class="model-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" /></svg>
+                  </button>
+                  <div class="model-select-menu hidden" id="modelSelectMenu" role="listbox" aria-label="深度模型选项">
+                    <button class="model-select-option is-selected" type="button" role="option" data-model-value="small" aria-selected="true">
+                      <span class="model-option-copy"><strong class="model-option-name">Small</strong><span class="model-option-meta">浏览器本地 · 约 99 MB</span></span>
+                      <span class="model-option-check" aria-hidden="true">✓</span>
+                    </button>
+                    <button class="model-select-option" type="button" role="option" data-model-value="base" aria-selected="false">
+                      <span class="model-option-copy"><strong class="model-option-name">Base</strong><span class="model-option-meta">浏览器本地 · 约 1.16 GB</span></span>
+                      <span class="model-option-check" aria-hidden="true">✓</span>
+                    </button>
+                    <button class="model-select-option" type="button" role="option" data-model-value="large" aria-selected="false">
+                      <span class="model-option-copy"><strong class="model-option-name">Large</strong><span class="model-option-meta">浏览器本地 · 约 3.9 GB</span></span>
+                      <span class="model-option-check" aria-hidden="true">✓</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="control-hint" id="modelRuntimeState"><span class="model-dot"></span><span>浏览器本地模型 · 尚未准备</span></div>
+                <div class="model-download" id="modelDownload">
+                  <div class="model-download-head"><span id="modelDownloadLabel">转换时先下载所选模型</span><span id="modelDownloadPercent">按需</span></div>
+                  <div class="model-download-track"><span id="modelDownloadBar"></span></div>
+                  <button class="model-action" id="prepareModelButton" type="button">提前准备所选模型</button>
+                </div>
+                <div class="model-storage" id="modelStorage">
+                  <div class="model-storage-head"><span>模型存储位置</span><span id="modelStorageMode">浏览器缓存</span></div>
+                  <div class="model-storage-row">
+                    <span class="model-storage-label" id="modelStorageLabel">由浏览器管理缓存位置</span>
+                    <button class="model-storage-button" id="chooseModelDirectoryButton" type="button">选择文件夹</button>
+                  </div>
+                  <div class="model-storage-hint" id="modelStorageHint">Chrome / Edge 桌面版可选择 D 盘或其他本地文件夹。</div>
+                </div>
+              </div>
+
+              <div class="control-group processing-mode-group">
+                <div class="control-label">处理模式 <span>MODE</span></div>
+                <div class="segmented-control processing-mode-control" id="processingModeControl" role="group" aria-label="处理模式">
+                  <button class="mode-segment active" type="button" aria-pressed="true" data-processing-mode="quality">质量优先</button>
+                  <button class="mode-segment" type="button" aria-pressed="false" data-processing-mode="speed">速度优先</button>
+                </div>
+                <div class="control-hint processing-mode-hint" id="processingModeHint"><span class="model-dot"></span><span>原始分辨率 · 原视频帧率 · 声音按开关选择</span></div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">输出分辨率 <span>OUTPUT</span></div>
+                <div class="segmented-control" id="resolutionControl" role="group" aria-label="输出分辨率">
+                  <button class="segment active" type="button" aria-pressed="true" data-resolution="original">原始</button>
+                  <button class="segment" type="button" aria-pressed="false" data-resolution="480">480p</button>
+                  <button class="segment" type="button" aria-pressed="false" data-resolution="720">720p</button>
+                  <button class="segment" type="button" aria-pressed="false" data-resolution="1080">1080p</button>
+                </div>
+                <div class="control-hint resolution-hint" id="resolutionHint"><span class="model-dot"></span><span>当前输出：原始分辨率</span></div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">输出帧率 <span>FRAME RATE</span></div>
+                <div class="source-fps-value" id="sourceFpsValue">跟随原视频帧率</div>
+                <div class="control-hint source-fps-hint" id="sourceFpsHint"><span class="model-dot"></span><span>最高 60 FPS · 不插入额外帧</span></div>
+              </div>
+
+              <div class="control-group slider-group">
+                <div class="slider-row">
+                  <label class="control-label" for="smoothRange">时序平滑 <span>SMOOTHING</span></label>
+                  <output id="smoothValue" for="smoothRange">60%</output>
+                </div>
+                <input id="smoothRange" type="range" min="0" max="100" value="60" />
+                <div class="range-labels"><span>细节优先</span><span>稳定优先</span></div>
+              </div>
+
+              <div class="control-group toggle-group">
+                <label class="toggle-row" for="invertToggle">
+                  <span><strong>黑白反转</strong><small>交换近景与远景的亮度</small></span>
+                  <input id="invertToggle" type="checkbox" /><span class="switch" aria-hidden="true"></span>
+                </label>
+                <label class="toggle-row" for="audioToggle">
+                  <span><strong>保留原声</strong><small id="audioToggleHint">默认关闭，可手动开启原始 AAC 音频</small></span>
+                  <input id="audioToggle" type="checkbox" disabled /><span class="switch" aria-hidden="true"></span>
+                </label>
+              </div>
+
+              <div class="output-location">
+                <div class="location-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4.5 7.5h5l1.5 2h8.5v8.8a1.7 1.7 0 0 1-1.7 1.7H6.2a1.7 1.7 0 0 1-1.7-1.7z" /><path d="M4.5 7.5v-1A1.5 1.5 0 0 1 6 5h3l1.5 2" /></svg>
+                </div>
+                <div><span>输出位置</span><strong id="outputLocationLabel">选择后保存到指定文件</strong></div>
+                <button id="chooseOutputButton" type="button" aria-label="选择输出保存位置">选择</button>
+              </div>
+
+              <div class="progress-wrap hidden" id="progressWrap">
+                <div class="progress-head"><span id="progressLabel">准备中</span><span id="progressPercent">0%</span></div>
+                <div class="progress-track"><span id="progressBar"></span></div>
+              </div>
+
+              <div class="conversion-log hidden" id="conversionLog">
+                <div class="progress-head"><span>任务日志</span><button class="log-clear" id="clearLogButton" type="button">清空</button></div>
+                <div class="conversion-log-box" id="conversionLogBox" role="log" aria-live="polite"></div>
+              </div>
+
+              <button class="primary-button" id="convertButton" type="button" disabled aria-disabled="true">
+                <span class="button-icon" aria-hidden="true">✦</span>
+                <span id="convertLabel">检测本机服务中</span>
+                <span class="button-arrow" aria-hidden="true">↗</span>
+              </button>
+              <p class="privacy-note"><span>⌁</span> 模型与素材默认在浏览器本地处理，不会上传到服务器。</p>
+            </section>
+
+            <section class="tip-card">
+              <div class="tip-topline"><span class="tip-number">TIP 01</span><span class="tip-line"></span></div>
+              <strong>深度图不是距离图</strong>
+              <p>输出代表画面中的相对前后关系，亮度越低通常表示离镜头越近。</p>
+            </section>
+          </aside>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span>DEPTHU VIDEO CONVERTER</span>
+        <span>Depth Anything V2 · Local inference</span>
+        <span>v0.1 · Prototype</span>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="modal-backdrop hidden" id="fullscreenModal" role="dialog" aria-modal="true" aria-label="深度结果预览">
+      <div class="fullscreen-dialog">
+        <button class="modal-close" type="button" data-action="close-fullscreen" aria-label="关闭">×</button>
+        <div class="modal-label">DEPTH MAP / FULLSCREEN PREVIEW</div>
+        <div class="modal-depth-preview"></div>
+        <div class="modal-footer"><span>相对深度预览</span><span id="modalOutputName">depth-output.mp4</span></div>
+      </div>
+    </div>
+
+    <script src="./app.js?v=20260930-4"></script>
+  </body>
+</html>
