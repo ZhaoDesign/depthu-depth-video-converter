@@ -1,10 +1,33 @@
-const TRANSFORMERS_MODULE = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm";
-const FFMPEG_MODULE = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm";
-const FFMPEG_UTIL_MODULE = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm";
-const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-const FFMPEG_WORKER_MODULE = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js";
-const FFMPEG_CONST_MODULE = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/const.js";
-const FFMPEG_ERRORS_MODULE = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/errors.js";
+const LOCAL_TRANSFORMERS_MODULE = "./vendor/transformers/transformers.bundle.js";
+const TRANSFORMERS_MODULES = [
+  LOCAL_TRANSFORMERS_MODULE,
+  "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm",
+  "https://esm.sh/@huggingface/transformers@3.8.1?bundle",
+];
+const FFMPEG_MODULES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm",
+  "https://esm.sh/@ffmpeg/ffmpeg@0.12.15?bundle",
+];
+const FFMPEG_UTIL_MODULES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm",
+  "https://esm.sh/@ffmpeg/util@0.12.2?bundle",
+];
+const FFMPEG_CORE_BASES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm",
+  "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm",
+];
+const FFMPEG_WORKER_MODULES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js",
+  "https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js",
+];
+const FFMPEG_CONST_MODULES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/const.js",
+  "https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/const.js",
+];
+const FFMPEG_ERRORS_MODULES = [
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/errors.js",
+  "https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/errors.js",
+];
 const LOCAL_AGENT_ORIGIN = "http://127.0.0.1:9876";
 const MAX_OUTPUT_FPS = 60;
 const SPEED_ANALYSIS_FPS = 12;
@@ -55,8 +78,13 @@ const state = {
   localModels: {},
   localMode: false,
   ffmpegAvailable: false,
+  transformersSource: "",
+  ffmpegSource: "",
+  dependencyCheckPromise: null,
   lastLog: "",
 };
+
+const moduleImportCache = new Map();
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -177,26 +205,197 @@ function parseVideoFpsFromLog(message) {
   return match ? parseRateToken(match[1]) : 0;
 }
 
-async function createSameOriginFfmpegWorkerURL() {
-  const [workerResponse, constResponse, errorsResponse] = await Promise.all([
-    fetch(FFMPEG_WORKER_MODULE),
-    fetch(FFMPEG_CONST_MODULE),
-    fetch(FFMPEG_ERRORS_MODULE),
-  ]);
-  if (!workerResponse.ok || !constResponse.ok || !errorsResponse.ok) {
-    throw new Error("浏览器视频引擎 Worker 模块下载失败");
+function dependencySourceLabel(source) {
+  if (source === LOCAL_TRANSFORMERS_MODULE) return "站点本地";
+  if (source.startsWith("https://cdn.jsdelivr.net/")) return "jsDelivr CDN";
+  if (source.startsWith("https://esm.sh/")) return "esm.sh CDN";
+  if (source.startsWith("https://unpkg.com/")) return "unpkg CDN";
+  return source;
+}
+
+function dependencyErrorMessage(error) {
+  return String(error?.message || error || "未知错误").replace(/\s+/g, " ").slice(0, 180);
+}
+
+function appendDiagnosticLog(message) {
+  if (!conversionLogBox) return;
+  const line = document.createElement("div");
+  const stamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  line.textContent = `[${stamp}] ${message}`;
+  conversionLog.classList.remove("hidden");
+  conversionLogBox.appendChild(line);
+  while (conversionLogBox.children.length > 80) conversionLogBox.firstElementChild.remove();
+  conversionLogBox.scrollTop = conversionLogBox.scrollHeight;
+}
+
+async function importModuleWithFallback(label, sources, cacheKey = label) {
+  if (moduleImportCache.has(cacheKey)) return moduleImportCache.get(cacheKey);
+  const promise = (async () => {
+    const failures = [];
+    for (const source of sources) {
+      const sourceLabel = dependencySourceLabel(source);
+      try {
+        const module = await import(source);
+        appendDiagnosticLog(`依赖自检 · ${label}已加载 · ${sourceLabel}`);
+        return { module, source };
+      } catch (error) {
+        const detail = dependencyErrorMessage(error);
+        failures.push(`${sourceLabel}: ${detail}`);
+        appendDiagnosticLog(`依赖自检 · ${label}加载失败 · ${sourceLabel} · ${detail}`);
+      }
+    }
+    throw new Error(`${label}加载失败：${failures.join(" | ")}`);
+  })();
+  moduleImportCache.set(cacheKey, promise);
+  try {
+    return await promise;
+  } catch (error) {
+    moduleImportCache.delete(cacheKey);
+    throw error;
   }
-  const [workerSource, constSource, errorsSource] = await Promise.all([
-    workerResponse.text(),
-    constResponse.text(),
-    errorsResponse.text(),
+}
+
+async function fetchResourceWithFallback(label, sources, options = {}) {
+  const { asText = false } = options;
+  const failures = [];
+  for (const source of sources) {
+    const sourceLabel = dependencySourceLabel(source);
+    try {
+      let response = await fetch(source, {
+        method: asText ? "GET" : "HEAD",
+        cache: "no-store",
+      });
+      if (!asText && !response.ok) {
+        response = await fetch(source, {
+          method: "GET",
+          headers: { Range: "bytes=0-1023" },
+          cache: "no-store",
+        });
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      appendDiagnosticLog(`依赖自检 · ${label}可访问 · ${sourceLabel}`);
+      return asText ? { source, value: await response.text() } : { source, response };
+    } catch (error) {
+      const detail = dependencyErrorMessage(error);
+      failures.push(`${sourceLabel}: ${detail}`);
+      appendDiagnosticLog(`依赖自检 · ${label}不可访问 · ${sourceLabel} · ${detail}`);
+    }
+  }
+  throw new Error(`${label}不可访问：${failures.join(" | ")}`);
+}
+
+async function loadTransformersModule() {
+  const loaded = await importModuleWithFallback("Transformers.js", TRANSFORMERS_MODULES, "transformers");
+  state.transformersSource = loaded.source;
+  return loaded;
+}
+
+async function loadFfmpegModule() {
+  const loaded = await importModuleWithFallback("FFmpeg 模块", FFMPEG_MODULES, "ffmpeg");
+  state.ffmpegSource = loaded.source;
+  return loaded;
+}
+
+async function loadFfmpegUtilModule() {
+  return importModuleWithFallback("FFmpeg 工具模块", FFMPEG_UTIL_MODULES, "ffmpeg-util");
+}
+
+async function runBrowserEnvironmentCheck({ video = true } = {}) {
+  if (state.dependencyCheckPromise) return state.dependencyCheckPromise;
+  state.dependencyCheckPromise = (async () => {
+    appendDiagnosticLog("环境自检 · 开始检查浏览器运行环境");
+    const requiredChecks = [
+      ["安全上下文", window.isSecureContext, window.isSecureContext ? "HTTPS / localhost" : "请使用 HTTPS 或 localhost 打开网站"],
+      ["在线状态", navigator.onLine !== false, navigator.onLine === false ? "浏览器当前处于离线状态" : "网络连接正常"],
+      ["Web Worker", typeof Worker === "function", typeof Worker === "function" ? "可用" : "当前浏览器不支持 Worker"],
+      ["WebAssembly", typeof WebAssembly === "object", typeof WebAssembly === "object" ? "可用" : "当前浏览器不支持 WebAssembly"],
+      ["Blob URL", typeof URL?.createObjectURL === "function", typeof URL?.createObjectURL === "function" ? "可用" : "当前浏览器不支持 Blob URL"],
+      ["Canvas 2D", Boolean(document.createElement("canvas").getContext("2d")), "用于把模型结果编码为深度帧"],
+    ];
+    const failed = [];
+    for (const [label, passed, detail] of requiredChecks) {
+      appendDiagnosticLog(`环境自检 · ${passed ? "通过" : "失败"} · ${label} · ${detail}`);
+      if (!passed) failed.push(label);
+    }
+    const webgpuAvailable = Boolean(navigator.gpu);
+    appendDiagnosticLog(`环境自检 · ${webgpuAvailable ? "提示" : "提示"} · WebGPU · ${webgpuAvailable ? "可用，将优先尝试 GPU" : "不可用，将自动使用 WASM/CPU"}`);
+
+    try {
+      await loadTransformersModule();
+    } catch (error) {
+      failed.push("Transformers.js");
+      appendDiagnosticLog(`环境自检 · 失败 · Transformers.js · ${dependencyErrorMessage(error)}`);
+    }
+    if (video) {
+      try {
+        await Promise.all([loadFfmpegModule(), loadFfmpegUtilModule()]);
+      } catch (error) {
+        failed.push("FFmpeg 模块");
+        appendDiagnosticLog(`环境自检 · 失败 · FFmpeg 模块 · ${dependencyErrorMessage(error)}`);
+      }
+
+      const resources = [
+        ["FFmpeg Core JS", FFMPEG_CORE_BASES.map((base) => `${base}/ffmpeg-core.js`)],
+        ["FFmpeg Core WASM", FFMPEG_CORE_BASES.map((base) => `${base}/ffmpeg-core.wasm`)],
+        ["FFmpeg Worker", FFMPEG_WORKER_MODULES],
+        ["FFmpeg const", FFMPEG_CONST_MODULES],
+        ["FFmpeg errors", FFMPEG_ERRORS_MODULES],
+      ];
+      for (const [label, sources] of resources) {
+        try {
+          await fetchResourceWithFallback(label, sources);
+        } catch (error) {
+          failed.push(label);
+          appendDiagnosticLog(`环境自检 · 失败 · ${label} · ${dependencyErrorMessage(error)}`);
+        }
+      }
+    }
+    appendDiagnosticLog("环境自检 · 模型权重将按需从 Hugging Face 下载，未打包进网站");
+    if (failed.length) {
+      throw new Error(`浏览器环境自检失败：${failed.join("、")}`);
+    }
+    appendDiagnosticLog(`环境自检 · 全部通过 · Transformers.js：${dependencySourceLabel(state.transformersSource)} · FFmpeg：${dependencySourceLabel(state.ffmpegSource)}`);
+    return true;
+  })().catch((error) => {
+    state.dependencyCheckPromise = null;
+    throw error;
+  });
+  return state.dependencyCheckPromise;
+}
+
+function diagnoseBrowserFailure(error, stage) {
+  const message = dependencyErrorMessage(error);
+  const lower = message.toLowerCase();
+  let category = "运行时或编码错误";
+  let hint = "请查看上方任务日志中的失败阶段和原始错误。";
+  if (lower.includes("dynamically imported module") || lower.includes("failed to fetch") || lower.includes("cdn") || lower.includes("network")) {
+    category = "依赖网络或 CDN 加载错误";
+    hint = "本地 Transformers.js 已先尝试；如果日志显示已切换 CDN，请检查当前网络、公司代理或浏览器扩展。";
+  } else if (lower.includes("wasm") || lower.includes("worker")) {
+    category = "WebAssembly / Worker 环境错误";
+    hint = "请使用最新版 Chrome 或 Edge，并确认网站通过 HTTPS 打开。";
+  } else if (lower.includes("h264") || lower.includes("encoder") || lower.includes("codec")) {
+    category = "浏览器编码器不兼容";
+    hint = "深度计算可能已经完成，但当前浏览器 FFmpeg 不包含目标编码器；可切换本机专业模式。";
+  }
+  appendDiagnosticLog(`故障诊断 · 阶段：${stage} · 类别：${category}`);
+  appendDiagnosticLog(`故障诊断 · 原始错误：${message}`);
+  appendDiagnosticLog(`故障诊断 · 建议：${hint}`);
+  return message;
+}
+
+async function createSameOriginFfmpegWorkerURL() {
+  const [worker, constants, errors] = await Promise.all([
+    fetchResourceWithFallback("FFmpeg Worker", FFMPEG_WORKER_MODULES, { asText: true }),
+    fetchResourceWithFallback("FFmpeg const", FFMPEG_CONST_MODULES, { asText: true }),
+    fetchResourceWithFallback("FFmpeg errors", FFMPEG_ERRORS_MODULES, { asText: true }),
   ]);
-  const workerWithoutRelativeImports = workerSource.replace(
+  const workerWithoutRelativeImports = worker.value.replace(
     /import\s+\{[^}]+\}\s+from\s+["']\.\/(?:const|errors)\.js["'];?\s*/g,
     "",
   );
   return URL.createObjectURL(new Blob([
-    `${constSource}\n${errorsSource}\n${workerWithoutRelativeImports}`,
+    `${constants.value}\n${errors.value}\n${workerWithoutRelativeImports}`,
   ], { type: "text/javascript" }));
 }
 
@@ -206,18 +405,22 @@ async function loadBrowserVideoEngine() {
 
   state.browserVideoEnginePromise = (async () => {
     setEngineState("正在下载浏览器视频引擎 · FFmpeg WASM");
-    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
-      import(FFMPEG_MODULE),
-      import(FFMPEG_UTIL_MODULE),
+    const [{ module: ffmpegModule }, { module: utilModule }] = await Promise.all([
+      loadFfmpegModule(),
+      loadFfmpegUtilModule(),
     ]);
+    const { FFmpeg } = ffmpegModule;
+    const { toBlobURL } = utilModule;
     if (!FFmpeg || !toBlobURL) throw new Error("浏览器视频引擎模块加载失败");
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => {
       const fps = parseVideoFpsFromLog(message);
       if (fps > 0) state.browserVideoSourceFps = fps;
     });
-    const coreURL = await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.js`, "text/javascript");
-    const wasmURL = await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`, "application/wasm");
+    const core = await fetchResourceWithFallback("FFmpeg Core JS", FFMPEG_CORE_BASES.map((base) => `${base}/ffmpeg-core.js`));
+    const wasm = await fetchResourceWithFallback("FFmpeg Core WASM", FFMPEG_CORE_BASES.map((base) => `${base}/ffmpeg-core.wasm`));
+    const coreURL = await toBlobURL(core.source, "text/javascript");
+    const wasmURL = await toBlobURL(wasm.source, "application/wasm");
     const classWorkerURL = await createSameOriginFfmpegWorkerURL();
     try {
       await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
@@ -786,7 +989,8 @@ async function loadDepthEstimator(modelValue = modelSelect.value) {
   setModelState(`准备 ${config.name} 浏览器模型 · 首次运行下载`, "idle");
   updateModelProgress({ status: "initiate", file: `Depth Anything V2 ${config.name}` });
   state.estimatorPromise = (async () => {
-    const { env, pipeline } = await import(TRANSFORMERS_MODULE);
+    const { module: transformers, source } = await loadTransformersModule();
+    const { env, pipeline } = transformers;
     env.allowRemoteModels = true;
     env.allowLocalModels = false;
     const hasCustomDirectory = Boolean(state.modelDirectoryHandle);
@@ -802,6 +1006,12 @@ async function loadDepthEstimator(modelValue = modelSelect.value) {
     env.backends = env.backends || {};
     env.backends.onnx = env.backends.onnx || {};
     env.backends.onnx.wasm = env.backends.onnx.wasm || {};
+    if (source === LOCAL_TRANSFORMERS_MODULE) {
+      env.backends.onnx.wasm.wasmPaths = new URL("./vendor/transformers/", document.baseURI).href;
+      appendDiagnosticLog("Transformers.js · 使用站点本地 ONNX WASM 运行时");
+    } else {
+      appendDiagnosticLog(`Transformers.js · 使用 ${dependencySourceLabel(source)}，ONNX WASM 按 CDN 默认路径加载`);
+    }
     env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(8, navigator.hardwareConcurrency || 1));
 
     const preferredBackend = navigator.gpu ? "webgpu" : "wasm";
@@ -1261,6 +1471,8 @@ async function startBrowserVideoConversion() {
   let depthFrames = [];
   try {
     await waitForVideoMetadata();
+    setProgress(4, "自检浏览器视频转换环境");
+    await runBrowserEnvironmentCheck({ video: true });
     const selectedName = modelSelect.options[modelSelect.selectedIndex]?.textContent?.split(" — ")[0] || "所选";
     setProgress(5, `准备 ${selectedName} 浏览器模型`);
     const estimator = await loadDepthEstimator();
@@ -1400,9 +1612,7 @@ async function startBrowserVideoConversion() {
     convertLabel.textContent = "重试浏览器视频转换";
     convertButton.disabled = false;
     setProgress(0, "浏览器视频转换失败");
-    const message = typeof error === "string"
-      ? error
-      : error?.message || "浏览器视频转换失败";
+    const message = diagnoseBrowserFailure(error, "浏览器视频转换");
     notify(message.includes("libx264")
       ? "当前浏览器视频引擎不包含 H.264 编码器，请改用本机专业模式"
       : `浏览器视频转换失败：${message.slice(0, 100)}`);
@@ -1567,6 +1777,8 @@ async function startConversion() {
   }
 
   try {
+    setProgress(4, "自检浏览器图片推理环境");
+    await runBrowserEnvironmentCheck({ video: false });
     const estimator = await loadDepthEstimator();
     setProgress(28, "读取图片素材");
     const input = await prepareInferenceInput();
@@ -1582,7 +1794,7 @@ async function startConversion() {
     resultState.style.color = "#ff9aa6";
     convertLabel.textContent = "重试本机推理";
     updateConversionAvailability();
-    const message = error?.message || "本地模型推理失败";
+    const message = diagnoseBrowserFailure(error, "浏览器图片推理");
     setProgress(0, "推理失败");
     notify(message.slice(0, 100));
   }
