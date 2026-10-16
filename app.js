@@ -1,4 +1,6 @@
 const LOCAL_TRANSFORMERS_MODULE = "./vendor/transformers/transformers.bundle.js";
+const LOCAL_TRANSFORMERS_WASM_MODULE = "./vendor/transformers/ort-wasm-simd-threaded.jsep.mjs";
+const LOCAL_TRANSFORMERS_WASM_BINARY = "./vendor/transformers/ort-wasm-simd-threaded.jsep.wasm";
 const TRANSFORMERS_MODULES = [
   LOCAL_TRANSFORMERS_MODULE,
   "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm",
@@ -322,6 +324,12 @@ async function runBrowserEnvironmentCheck({ video = true } = {}) {
 
     try {
       await loadTransformersModule();
+      if (state.transformersSource === LOCAL_TRANSFORMERS_MODULE) {
+        const wasmModuleUrl = new URL(LOCAL_TRANSFORMERS_WASM_MODULE, document.baseURI).href;
+        await import(wasmModuleUrl);
+        await fetchResourceWithFallback("本地 ONNX WASM 二进制", [new URL(LOCAL_TRANSFORMERS_WASM_BINARY, document.baseURI).href]);
+        appendDiagnosticLog("环境自检 · 通过 · 本地 ONNX WASM 动态模块和二进制均可加载");
+      }
     } catch (error) {
       failed.push("Transformers.js");
       appendDiagnosticLog(`环境自检 · 失败 · Transformers.js · ${dependencyErrorMessage(error)}`);
@@ -1007,7 +1015,11 @@ async function loadDepthEstimator(modelValue = modelSelect.value) {
     env.backends.onnx = env.backends.onnx || {};
     env.backends.onnx.wasm = env.backends.onnx.wasm || {};
     if (source === LOCAL_TRANSFORMERS_MODULE) {
-      env.backends.onnx.wasm.wasmPaths = new URL("./vendor/transformers/", document.baseURI).href;
+      const wasmBase = new URL("./vendor/transformers/", document.baseURI);
+      env.backends.onnx.wasm.wasmPaths = {
+        mjs: new URL(LOCAL_TRANSFORMERS_WASM_MODULE.replace("./vendor/transformers/", ""), wasmBase).href,
+        wasm: new URL(LOCAL_TRANSFORMERS_WASM_BINARY.replace("./vendor/transformers/", ""), wasmBase).href,
+      };
       appendDiagnosticLog("Transformers.js · 使用站点本地 ONNX WASM 运行时");
     } else {
       appendDiagnosticLog(`Transformers.js · 使用 ${dependencySourceLabel(source)}，ONNX WASM 按 CDN 默认路径加载`);
